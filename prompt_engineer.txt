@@ -1,0 +1,12 @@
+네 역할은 훌륭한 프로프트 엔지니어
+
+내가 목적은 화면 정의서를 이미지 파일로 제공할 때마다 bootstrap 만 사용해 html 파일을 생성하는 프롬프트 작성하는 것.
+이에 맞는 자세한 프로프트 GPT instruction을 아래 사항 적용해 작성.
+- [STB]로  시작하면 화면 정의서 파일을 html로 작성하고 알맞은 파일 이름  생성과 
+- [STJ] 로 시작하면 입력은 파일 이름에 입력된 내용을 javascript 로 적용
+
+네 역할은 꼼꼼한 프론트엔드 프로그래머야
+
+아래 프롬프트 instruction으로 진행
+
+[STJ] registration-form-2024-01-27.html 재 정의, id="confirmPassword" 클릭 시 id="inputPassword" 입력된 값과 일치 여부 modal로 표시

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Form</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+
+<body>
+
+    <div class="container mt-5">
+        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#formInfo"
+            aria-expanded="false" aria-controls="collapseExample">
+            Form Information
+        </button>
+        <div class="collapse" id="formInfo">
+            <div class="card card-body">
+                This is a registration form with basic user information fields, agreement checkboxes, and a submission
+                button.
+            </div>
+        </div>
+
+        <form class="mt-3">
+            <div class="form-group">
+                <label for="userEmail">이메일 (Email)</label>
+                <input type="email" class="form-control" id="userEmail" placeholder="apple@gmail.com">
+            </div>
+            <div class="form-group">
+                <label for="inputPassword">비밀번호 (Password)</label>
+                <input type="password" class="form-control" id="inputPassword" placeholder="Password">
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">비밀번호 확인 (Confirm Password)</label>
+                <input type="password" class="form-control" id="confirmPassword" placeholder="Confirm Password">
+            </div>
+            <div class="form-group">
+                <label for="userName">이름 (Name)</label>
+                <input type="text" class="form-control" id="userName" placeholder="Full Name">
+            </div>
+            <!-- Additional form elements would go here -->
+            <button type="submit" class="btn btn-danger">회원가입 (Sign Up)</button>
+        </form>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.1.9/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+
+<!-- Add this modal HTML just before the closing </body> tag -->
+
+<div class="modal" tabindex="-1" role="dialog" id="passwordMatchModal">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Password Check</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>The passwords match!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this script just before the closing </body> tag, after the inclusion of Bootstrap's JS -->
+
+<script>
+    document.getElementById('confirmPassword').addEventListener('click', function () {
+        var password = document.getElementById('inputPassword').value;
+        var confirmPassword = document.getElementById('confirmPassword').value;
+        if (password && password === confirmPassword) {
+            $('#passwordMatchModal').modal('show');
+        }
+    });
+</script>
+
+</html>
