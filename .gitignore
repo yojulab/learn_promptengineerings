@@ -162,3 +162,4 @@ cython_debug/
 .env
 codes/langGraphs/.langgraph_api/*
 !dockers/.env
+output/
