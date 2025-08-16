@@ -31,6 +31,19 @@ if run_clicked:
     st.write('System 프롬프트:', system_prompt)
     st.write('User 프롬프트:', user_prompt)
     st.write('업로드된 파일:', [f.name for f in uploaded_files] if uploaded_files else '없음')
+    log_placeholder = st.empty()
+    steps = [
+        '1. 프롬프트 분석 중...',
+        '2. 적합한 MCP 서버 선택 중...',
+        '3. 파일 파싱 요청 중...',
+        '4. 파싱 결과 HTML 변환 중...',
+        '5. 결과 캔버스 표시 준비...'
+    ]
+    for step in steps:
+        log_placeholder.info(step)
+        import time
+        time.sleep(0.5)
+    st.success('파싱 완료!')
 
 st.subheader('파싱 진행 로그')
 log_placeholder = st.empty()
