@@ -2,21 +2,21 @@ import streamlit as st
 import asyncio
 from typing import Dict, Any, List, Optional
 from langgraph.graph import StateGraph, END
-from langchain_community.llms import Ollama
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from dataclasses import dataclass
 import json
 import time
+import httpx
 
 # State 정의
-@dataclass
-class ChatState:
+from typing import TypedDict
+
+class ChatState(TypedDict):
     messages: List[Dict[str, str]]
     model_name: str
     system_prompt: str
     current_step: str
-    error: Optional[str] = None
-    processing: bool = False
+    error: Optional[str]
+    processing: bool
 
 class MultiModelChatGraph:
     def __init__(self):
@@ -53,89 +53,147 @@ class MultiModelChatGraph:
     
     def validate_input(self, state: ChatState) -> ChatState:
         """입력 검증"""
-        state.current_step = "입력 검증 중..."
+        state["current_step"] = "입력 검증 중..."
         
-        if not state.messages:
-            state.error = "메시지가 없습니다."
+        if not state["messages"]:
+            state["error"] = "메시지가 없습니다."
             return state
             
-        if not state.model_name:
-            state.error = "모델이 선택되지 않았습니다."
+        if not state["model_name"]:
+            state["error"] = "모델이 선택되지 않았습니다."
             return state
             
-        if state.model_name not in self.available_models:
-            state.error = f"지원하지 않는 모델입니다: {state.model_name}"
+        if state["model_name"] not in self.available_models:
+            state["error"] = f"지원하지 않는 모델입니다: {state['model_name']}"
             return state
             
-        state.error = None
+        state["error"] = None
         return state
     
     def should_process(self, state: ChatState) -> str:
         """조건부 라우팅"""
-        return "error" if state.error else "process"
+        return "error" if state["error"] else "process"
     
     def process_message(self, state: ChatState) -> ChatState:
         """메시지 전처리"""
-        state.current_step = "메시지 처리 중..."
-        state.processing = True
+        state["current_step"] = "메시지 처리 중..."
+        state["processing"] = True
         return state
     
-    def generate_response(self, state: ChatState) -> ChatState:
-        """응답 생성"""
+    async def generate_response(self, state: ChatState) -> ChatState:
+        """응답 생성 - 개선된 오류 처리 및 재시도 로직"""
         try:
-            state.current_step = f"{state.model_name} 모델로 응답 생성 중..."
-            
-            # Ollama 모델 초기화
-            llm = Ollama(
-                model=state.model_name,
-                base_url="http://localhost:11434"
-            )
-            
-            # 메시지 구성
-            messages = []
-            if state.system_prompt:
-                messages.append(SystemMessage(content=state.system_prompt))
-            
-            # 대화 히스토리 추가
-            for msg in state.messages:
-                if msg["role"] == "user":
-                    messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    messages.append(AIMessage(content=msg["content"]))
+            state["current_step"] = f"{state['model_name']} 모델로 응답 생성 중..."
             
             # 최신 사용자 메시지만 처리
-            user_message = state.messages[-1]["content"]
+            user_message = state["messages"][-1]["content"]
             
-            # 프롬프트 구성
-            full_prompt = ""
-            if state.system_prompt:
-                full_prompt += f"System: {state.system_prompt}\n\n"
-            full_prompt += f"Human: {user_message}\n\nAssistant:"
+            # 프롬프트 길이 제한 (너무 긴 프롬프트는 오류 원인이 될 수 있음)
+            if len(user_message) > 2000:
+                user_message = user_message[:2000] + "..."
             
-            # 응답 생성
-            response = llm.invoke(full_prompt)
+            # 프롬프트 구성 (system과 user 분리, 더 간단한 형태)
+            if state["system_prompt"] and len(state["system_prompt"].strip()) > 0:
+                combined_prompt = f"{state['system_prompt']}\n\n{user_message}"
+            else:
+                combined_prompt = user_message
+            
+            # HTTP 요청 데이터 구성 (options 추가로 안정성 향상)
+            request_data = {
+                "model": state["model_name"],
+                "prompt": combined_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "stop": ["Human:", "User:"]  # 정지 토큰 추가
+                }
+            }
+            
+            print(f"🔧 요청 데이터: 모델={state['model_name']}, 프롬프트 길이={len(combined_prompt)}")
+            
+            # Ollama API 직접 호출 (타임아웃 증가 및 재시도 로직)
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=60.0) as client:  # 타임아웃 증가
+                        response = await client.post(
+                            "http://localhost:11434/api/generate",
+                            json=request_data
+                        )
+                        
+                        # 상태 코드 확인
+                        if response.status_code == 200:
+                            response_data = response.json()
+                            break
+                        elif response.status_code == 500:
+                            if attempt < max_retries - 1:
+                                print(f"⚠️ 서버 오류 (시도 {attempt + 1}/{max_retries}), 재시도...")
+                                await asyncio.sleep(2)  # 2초 대기 후 재시도
+                                continue
+                            else:
+                                raise httpx.HTTPStatusError(f"서버 오류: {response.status_code}", request=response.request, response=response)
+                        else:
+                            response.raise_for_status()
+                            
+                except httpx.TimeoutException:
+                    if attempt < max_retries - 1:
+                        print(f"⏰ 타임아웃 (시도 {attempt + 1}/{max_retries}), 재시도...")
+                        await asyncio.sleep(3)  # 3초 대기 후 재시도
+                        continue
+                    else:
+                        raise
+            
+            # 응답 텍스트 추출
+            ai_response = response_data.get("response", "")
+            
+            # 빈 응답 처리
+            if not ai_response or ai_response.strip() == "":
+                ai_response = "죄송합니다. 응답을 생성하지 못했습니다."
             
             # 응답을 메시지 히스토리에 추가
-            state.messages.append({
+            state["messages"].append({
                 "role": "assistant",
-                "content": response,
-                "model": state.model_name
+                "content": ai_response.strip(),
+                "model": state["model_name"]
             })
             
-            state.current_step = "완료"
-            state.processing = False
+            state["current_step"] = "완료"
+            state["processing"] = False
             
+            # 디버깅용 로그
+            print(f"✅ 응답 생성 완료: {ai_response[:100]}...")
+            
+        except httpx.TimeoutException:
+            state["error"] = "요청 시간 초과 - Ollama 서버가 응답하지 않습니다."
+            state["current_step"] = "시간 초과"
+            state["processing"] = False
+            print("⏰ 타임아웃 오류")
+        except httpx.RequestError as e:
+            state["error"] = f"연결 오류: Ollama 서버에 연결할 수 없습니다. ({str(e)})"
+            state["current_step"] = "연결 오류"
+            state["processing"] = False
+            print(f"🔌 연결 오류: {e}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 500:
+                state["error"] = "서버 내부 오류 - 모델이 로드되지 않았거나 프롬프트에 문제가 있을 수 있습니다."
+            else:
+                state["error"] = f"HTTP 오류: {e.response.status_code}"
+            state["current_step"] = "서버 오류"
+            state["processing"] = False
+            print(f"🚫 HTTP 오류: {e.response.status_code}")
         except Exception as e:
-            state.error = f"응답 생성 중 오류 발생: {str(e)}"
-            state.current_step = "오류 발생"
-            state.processing = False
+            state["error"] = f"예상치 못한 오류: {str(e)}"
+            state["current_step"] = "오류 발생"
+            state["processing"] = False
+            print(f"💥 예상치 못한 오류: {e}")
         
         return state
     
     def handle_error(self, state: ChatState) -> ChatState:
         """오류 처리"""
-        state.current_step = f"오류: {state.error}"
-        state.processing = False
+        state["current_step"] = f"오류: {state['error']}"
+        state["processing"] = False
         return state
 
 def init_session_state():
@@ -188,6 +246,9 @@ def main():
             help="모델의 전반적인 행동을 지정합니다."
         )
         
+        # 디버깅 모드 추가
+        debug_mode = st.checkbox("🐛 디버그 모드", help="원본 응답을 확인할 수 있습니다.")
+        
         # 설정 저장
         if st.button("🔄 설정 새로고침", type="secondary"):
             st.rerun()
@@ -205,28 +266,33 @@ def main():
             "총 대화 수": len(st.session_state.messages)
         })
     
+    # 사용자 입력을 상단으로 이동
+    st.subheader("💬 대화")
+    user_input = st.chat_input("메시지를 입력하세요...")
+    
     # 메인 작업 영역
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("💬 대화")
-        
         # 대화 기록 표시
         chat_container = st.container()
         with chat_container:
             for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "user":
                     with st.chat_message("user"):
-                        st.write(message["content"])
+                        st.markdown(message["content"])
                 elif message["role"] == "assistant":
                     with st.chat_message("assistant"):
-                        st.write(message["content"])
+                        st.markdown(message["content"])
                         if "model" in message:
                             st.caption(f"Model: {message['model']}")
+                        
+                        # 디버그 모드에서 원본 응답 표시
+                        if debug_mode and i == len(st.session_state.messages) - 1:
+                            with st.expander("🔍 디버그 정보"):
+                                st.text("이 정보는 마지막 응답에 대한 디버그 정보입니다.")
         
-        # 사용자 입력
-        user_input = st.chat_input("메시지를 입력하세요...")
-        
+        # 사용자 입력 처리
         if user_input:
             # 사용자 메시지 추가
             st.session_state.messages.append({
@@ -234,25 +300,60 @@ def main():
                 "content": user_input
             })
             
-            # 상태 생성
-            state = ChatState(
-                messages=st.session_state.messages.copy(),
-                model_name=selected_model,
-                system_prompt=system_prompt,
-                current_step="시작",
-                processing=True
-            )
-            
-            # 그래프 실행
-            try:
-                result = st.session_state.graph_executor.invoke(state)
+            # 진행 상황 표시
+            with st.spinner("응답 생성 중..."):
+                # 상태 생성 (TypedDict 형태로)
+                state = {
+                    "messages": st.session_state.messages.copy(),
+                    "model_name": selected_model,
+                    "system_prompt": system_prompt,
+                    "current_step": "시작",
+                    "error": None,
+                    "processing": True
+                }
                 
-                # 결과를 세션에 저장
-                if not result.error and len(result.messages) > len(st.session_state.messages):
-                    st.session_state.messages = result.messages
+                # 그래프 실행 (graph_executor를 직접 전달)
+                try:
+                    # Streamlit에서 async 함수 실행하기 위한 간단한 방법
+                    import concurrent.futures
+                    
+                    # 그래프 실행자를 로컬 변수로 복사 (스레드 간 공유 불가 해결)
+                    graph_executor = st.session_state.graph_executor
+                    
+                    def run_async_in_thread(executor, state_data):
+                        # 새 스레드에서 새로운 이벤트 루프 생성
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            return loop.run_until_complete(executor.ainvoke(state_data))
+                        finally:
+                            loop.close()
+                    
+                    # ThreadPoolExecutor를 사용하여 async 함수 실행
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_async_in_thread, graph_executor, state)
+                        result = future.result(timeout=120)  # 2분 타임아웃
+                    
+                    # 결과를 세션에 저장 (딕셔너리 접근 방식)
+                    if isinstance(result, dict):
+                        if not result.get("error"):
+                            if "messages" in result and len(result["messages"]) > len(st.session_state.messages):
+                                st.session_state.messages = result["messages"]
+                                print(f"✅ UI 업데이트: {len(result['messages'])}개 메시지")
+                            else:
+                                print("⚠️ 메시지 업데이트 없음")
+                                print(f"🔍 결과 메시지 수: {len(result.get('messages', []))}, 세션 메시지 수: {len(st.session_state.messages)}")
+                        else:
+                            st.error(f"오류: {result['error']}")
+                            print(f"❌ 오류 발생: {result['error']}")
+                    else:
+                        print(f"🔍 결과 상태: {type(result)}, {result}")
                 
-            except Exception as e:
-                st.error(f"처리 중 오류 발생: {str(e)}")
+                except Exception as e:
+                    st.error(f"처리 중 오류 발생: {str(e)}")
+                    print(f"💥 처리 오류: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             st.rerun()
     
