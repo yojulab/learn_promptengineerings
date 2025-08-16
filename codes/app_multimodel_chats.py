@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 import time
 import httpx
+import requests
 
 # State 정의
 from typing import TypedDict
@@ -98,25 +99,45 @@ class MultiModelChatGraph:
             else:
                 combined_prompt = user_message
             
-            # HTTP 요청 데이터 구성 (options 추가로 안정성 향상)
+            # HTTP 요청 데이터 구성 (최소한의 옵션으로 안정성 향상)
             request_data = {
                 "model": state["model_name"],
                 "prompt": combined_prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "stop": ["Human:", "User:"]  # 정지 토큰 추가
+                    "temperature": 0.7
                 }
             }
             
             print(f"🔧 요청 데이터: 모델={state['model_name']}, 프롬프트 길이={len(combined_prompt)}")
             
+            # 먼저 모델 상태 확인
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    models_response = await client.get("http://localhost:11434/api/tags")
+                    if models_response.status_code == 200:
+                        models_data = models_response.json()
+                        model_names = [model.get("name", "") for model in models_data.get("models", [])]
+                        if state["model_name"] not in model_names:
+                            print(f"⚠️ 모델 {state['model_name']}이 로드되지 않았습니다. 사용 가능한 모델: {model_names}")
+                        else:
+                            print(f"✅ 모델 {state['model_name']} 확인됨")
+                    else:
+                        print(f"⚠️ 모델 목록 조회 실패: {models_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ 모델 상태 확인 실패: {e}")
+            
             # Ollama API 직접 호출 (타임아웃 증가 및 재시도 로직)
             max_retries = 2
             for attempt in range(max_retries):
                 try:
-                    async with httpx.AsyncClient(timeout=60.0) as client:  # 타임아웃 증가
+                    # 첫 번째 시도가 실패하면 간단한 프롬프트로 테스트
+                    if attempt == 1:
+                        print("🔄 간단한 프롬프트로 재시도...")
+                        request_data["prompt"] = "Hello"
+                        request_data["options"] = {"temperature": 0.1}
+                    
+                    async with httpx.AsyncClient(timeout=90.0) as client:  # 타임아웃 더 증가
                         response = await client.post(
                             "http://localhost:11434/api/generate",
                             json=request_data
@@ -258,6 +279,21 @@ def main():
             st.session_state.messages = []
             st.rerun()
         
+        # 서버 상태 확인
+        st.subheader("🔌 서버 상태")
+        if st.button("🔍 Ollama 서버 확인", type="secondary"):
+            try:
+                import requests
+                response = requests.get("http://localhost:11434/api/tags", timeout=5)
+                if response.status_code == 200:
+                    models_data = response.json()
+                    model_names = [model.get("name", "") for model in models_data.get("models", [])]
+                    st.success(f"✅ 서버 정상 - 로드된 모델: {', '.join(model_names)}")
+                else:
+                    st.error(f"❌ 서버 오류: {response.status_code}")
+            except Exception as e:
+                st.error(f"❌ 연결 실패: {str(e)}")
+        
         # 모델 정보
         st.subheader("ℹ️ 모델 정보")
         st.json({
@@ -332,7 +368,7 @@ def main():
                     # ThreadPoolExecutor를 사용하여 async 함수 실행
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(run_async_in_thread, graph_executor, state)
-                        result = future.result(timeout=120)  # 2분 타임아웃
+                        result = future.result(timeout=350)  # 7분 타임아웃
                     
                     # 결과를 세션에 저장 (딕셔너리 접근 방식)
                     if isinstance(result, dict):
