@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GITHUB_PAT=${GITHUB_PAT}
+    ports:
+      - 3005:3005
+    environment:
+      - NODE_ENV=production          # Node.js 표준 환경 변수
+      - production=true              # 기존 설정
+      - LOG_LEVEL=info              # 로그 레벨
+    restart: unless-stopped
+    env_file:
+      - .env

@@ -6,6 +6,9 @@ sqlite3
 # Web UI (optional)
 streamlit
 
+# ai
+openai
+
 # Development tools
 pytest
 black

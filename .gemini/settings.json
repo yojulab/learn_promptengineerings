@@ -1,0 +1,29 @@
+{
+	"mcpServers": {
+		"sequential-thinking": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@modelcontextprotocol/server-sequential-thinking"
+			]
+		},
+		"playwright": {
+			"command": "npx",
+			"args": [
+				"@playwright/mcp@latest"
+			]
+		},
+		"context7": {
+			"type": "http",
+			"url": "https://mcp.context7.com/mcp"
+		},
+		"@21st-dev/magic": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@21st-dev/magic@latest",
+				"API_KEY=cb8d9fe7056bfc98b12a19caa0eac78aff53a51db403d8280da7df9bc003347a"
+			]
+		}
+	}
+}
