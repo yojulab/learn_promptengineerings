@@ -14,11 +14,11 @@ ai_models, mcp_servers = sidebar()
 st.subheader('프롬프트 입력')
 
 
-system_prompt = st.text_area('System 프롬프트')
-user_prompt = st.text_area('User 프롬프트')
+system_prompt = st.text_area('System 프롬프트', '파일 종류 따라 파싱')
+user_prompt = st.text_area('User 프롬프트', '첨부 파일 tml로 파싱')
 
 st.subheader('파일 업로드')
-uploaded_files = st.file_uploader('문서 파일 업로드', accept_multiple_files=True)
+uploaded_files = st.file_uploader('문서 파일 업로드', accept_multiple_files=True, key='file_uploader_main')
 
 # 실행 버튼 추가
 run_clicked = st.button('실행')
@@ -31,10 +31,6 @@ if run_clicked:
     st.write('System 프롬프트:', system_prompt)
     st.write('User 프롬프트:', user_prompt)
     st.write('업로드된 파일:', [f.name for f in uploaded_files] if uploaded_files else '없음')
-
-st.subheader('파일 업로드')
-
-uploaded_files = st.file_uploader('문서 파일 업로드', accept_multiple_files=True)
 
 st.subheader('파싱 진행 로그')
 log_placeholder = st.empty()

@@ -1,4 +1,4 @@
-좋습니다 👍 요청 주신 기준(sequential-thinking, context7)과 기술 스펙(streamlit, langgraph, multi-agent)을 반영해 **PRD 초안**을 작성했습니다.
+- sequential-thinking, context7)과 기술 스펙(streamlit, langgraph, multi-agent)을 반영 작성 필요
 
 ---
 
@@ -126,8 +126,3 @@ codes/
       ├── file_utils.py    # 파일 처리 유틸
       └── prompt_utils.py  # 프롬프트 처리 유틸
 ```
-
----
-
-👉 제가 작성한 초안은 **PRD 기본 뼈대 + 시나리오 + codes 구조**까지 포함했습니다.
-혹시 이걸 \*\*기능 우선순위 (MoSCoW 방식)\*\*까지 정리해드릴까요? 아니면 지금은 **화면 UI 와 워크플로우** 상세화를 먼저 할까요?

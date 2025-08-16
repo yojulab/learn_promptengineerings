@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     openssh-client \
-    nano \
+    nano fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
 
 # Set bash as default shell
@@ -19,9 +19,9 @@ ARG GITHUB_PAT
 ENV GITHUB_PAT=${GITHUB_PAT}
 
 # Clone the private repository using PAT
-RUN git clone https://${GITHUB_PAT}@github.com/gocolab/project_lessonplans.git project_lessonplans
+RUN git clone https://github.com/yojulab/learn_promptengineerings.git learn_promptengineerings
 
-WORKDIR /apps/project_lessonplans
+WORKDIR /apps/learn_promptengineerings
 
 # Install dependencies and build the application
 RUN npm install
