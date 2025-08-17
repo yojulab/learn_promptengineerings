@@ -23,6 +23,7 @@ class MultiModelChatGraph:
     def __init__(self):
         self.available_models = {
             "gemma3:1b": "Gemma 3 1B - 빠른 응답, 가벼운 모델",
+            "deepseek-r1:1.5b": "deepseek-r1 1.5b",
             "qwen3:1.7b": "Qwen 3 1.7B - 균형잡힌 성능"
         }
         
